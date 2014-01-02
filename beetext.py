@@ -32,6 +32,28 @@ def get_wordcount():
 
     return total_words
 
+def get_beeminder():
+    config = ConfigParser.RawConfigParser()
+    config.read(CONFIG_FILE_NAME)
+
+    username = config.get(BEEMINDER_SECTION, "username")
+    auth_token = config.get(BEEMINDER_SECTION, "auth_token")
+    goal_name = config.get(BEEMINDER_SECTION, "goal_name")
+
+    response = urllib2.urlopen(GET_DATAPOINTS_URL % (username, goal_name, auth_token))
+    the_page = response.read()
+    return the_page
+
+def get_most_recent_wordcount():
+    bm = simplejson.loads(get_beeminder())
+    max_timestamp = 0
+    most_recent_value = 0
+    for d in bm:
+        if d["timestamp"] > max_timestamp:
+            max_timestamp = d["timestamp"]
+            most_recent_value = int(d["value"])
+    return most_recent_value
+
 def post_beeminder_entry(entry):
     config = ConfigParser.RawConfigParser()
     config.read(CONFIG_FILE_NAME)
@@ -48,11 +70,17 @@ def post_beeminder_entry(entry):
 
 
 if __name__ == "__main__":
-    # get dates of days meditated, from insight
+    # get current wordcount
     total_wordcount = get_wordcount()
     print "%s words written" % total_wordcount
 
-    # create beeminder-friendly datapoints
-    new_datapoint = {'timestamp': int(time.time()), 'value':total_wordcount, "comment":"test"}
+    # get latest wordcount, from beeminder
+    most_recent_reported = get_most_recent_wordcount()
+    print "Most recent wordcount reported to beeminder: %s" % most_recent_reported
 
-    post_beeminder_entry(new_datapoint)
+    if(total_wordcount == most_recent_reported):
+        print "No change, not reporting to beeimder."
+    else:
+        # create beeminder-friendly datapoints
+        new_datapoint = {'timestamp': int(time.time()), 'value':total_wordcount, "comment":"test"}
+        post_beeminder_entry(new_datapoint)
